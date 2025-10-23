@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Добавляем обработку ошибок
-set -euo pipefail
-
 # Проверка на запуск от root
 if [ "$(id -u)" -ne 0 ]; then
     echo "Этот скрипт должен запускаться от root (используйте sudo)."
@@ -31,51 +28,97 @@ sysctl -p /etc/sysctl.d/10-disable-ipv6.conf
 echo "Проверка состояния IPv6 после отключения..."
 ip a | grep inet6 || echo "IPv6 успешно отключен (нет записей inet6)."
 
-# Функция для безопасного ввода пароля
-get_password() {
-    local password
-    while true; do
-        read -s -p "Введите пароль: " password
-        echo
-        read -s -p "Подтвердите пароль: " password_confirm
-        echo
+# Смена пароля пользователя
+echo "Смена пароля пользователя..."
 
-        if [ "$password" == "$password_confirm" ]; then
-            echo "$password"
-            break
-        else
-            echo "Пароли не совпадают. Попробуйте заново."
-        fi
-    done
-}
+# Запрос имени пользователя (по умолчанию - текущий)
+CURRENT_USER=$(whoami)
+read -p "Введите имя пользователя для смены пароля (по умолчанию: $CURRENT_USER): " USERNAME
+USERNAME=${USERNAME:-$CURRENT_USER}
 
-# Функция для создания пользователя с безопасной обработкой пароля
+# Запрос нового пароля (скрытый ввод)
+while true; do
+    read -s -p "Введите новый сложный пароль: " PASSWORD
+    echo
+    read -s -p "Подтвердите пароль: " PASSWORD_CONFIRM
+    echo
+
+    if [ "$PASSWORD" == "$PASSWORD_CONFIRM" ]; then
+        break
+    else
+        echo "Пароли не совпадают. Попробуйте заново."
+    fi
+done
+
+# Применение смены пароля
+echo "$USERNAME:$PASSWORD" | chpasswd
+if [ $? -eq 0 ]; then
+    echo "Пароль для пользователя $USERNAME успешно изменён."
+else
+    echo "Ошибка при смене пароля. Проверьте логи."
+    exit 1  # Можно убрать exit, если не хочешь прерывать скрипт
+fi
+
+# Функция для создания/обновления пользователя с паролем и добавлением в sudo
 create_user() {
     local USER=$1
-    
-    echo "Создание пользователя $USER..."
-    adduser --gecos "" --disabled-password "$USER"
-    
-    # Безопасный ввод и установка пароля
-    echo "Установка пароля для пользователя $USER:"
-    local password=$(get_password)
-    
-    # Устанавливаем пароль без хранения в переменной
-    echo "$USER:$password" | chpasswd
-    
-    # Очищаем переменные с паролями
-    password=""
-    password_confirm=""
-    
-    echo "Пользователь $USER создан и пароль установлен."
 
-    # Добавление в группу sudo
-    usermod -aG sudo "$USER"
-    echo "$USER добавлен в группу sudo."
+    if id -u "$USER" > /dev/null 2>&1; then
+        echo "Пользователь $USER уже существует."
+        read -p "Обновить пароль для $USER? (y/n): " UPDATE_PASSWORD
+        if [ "$UPDATE_PASSWORD" != "y" ]; then
+            echo "Пропуск обновления пароля для $USER."
+        else
+            # Запрос пароля
+            while true; do
+                read -s -p "Введите новый пароль для $USER: " PASS
+                echo
+                read -s -p "Подтвердите пароль: " PASS_CONFIRM
+                echo
+
+                if [ "$PASS" == "$PASS_CONFIRM" ]; then
+                    break
+                else
+                    echo "Пароли не совпадают. Попробуйте заново."
+                fi
+            done
+            echo "$USER:$PASS" | chpasswd
+            echo "Пароль для $USER обновлён."
+        fi
+    else
+        echo "Создание пользователя $USER..."
+        adduser --gecos "" --disabled-password "$USER"
+        
+        # Запрос пароля
+        while true; do
+            read -s -p "Введите пароль для $USER: " PASS
+            echo
+            read -s -p "Подтвердите пароль: " PASS_CONFIRM
+            echo
+
+            if [ "$PASS" == "$PASS_CONFIRM" ]; then
+                break
+            else
+                echo "Пароли не совпадают. Попробуйте заново."
+            fi
+        done
+        echo "$USER:$PASS" | chpasswd
+        echo "Пользователь $USER создан и пароль установлен."
+    fi
+
+    # Добавление в группу sudo (если ещё не в ней)
+    if ! groups "$USER" | grep -q sudo; then
+        usermod -aG sudo "$USER"
+        echo "$USER добавлен в группу sudo."
+    else
+        echo "$USER уже в группе sudo."
+    fi
 }
 
 # Создание пользователей
 create_user "putopelatudo"
 create_user "reserveme"
+
+# Здесь будут добавляться следующие задачи
 
 echo "Установка завершена!"
