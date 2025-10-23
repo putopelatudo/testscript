@@ -152,29 +152,6 @@ change_ssh_port() {
     echo "Для подключения используйте: ssh -p 4422 username@server_ip"
 }
 
-# Функция для настройки SSH (оригинальная из скрипта)
-setup_ssh() {
-    echo "Настройка SSH..."
-    sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup.$(date +%Y%m%d%H%M%S)
-    
-    # Отключаем вход по паролю и root-вход
-    sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-    sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
-    
-    # Включаем использование PAM
-    sudo sed -i 's/UsePAM no/UsePAM yes/' /etc/ssh/sshd_config
-    
-    # Добавляем настройки безопасности
-    echo "Protocol 2" | sudo tee -a /etc/ssh/sshd_config
-    echo "MaxAuthTries 3" | sudo tee -a /etc/ssh/sshd_config
-    echo "ClientAliveInterval 300" | sudo tee -a /etc/ssh/sshd_config
-    echo "ClientAliveCountMax 2" | sudo tee -a /etc/ssh/sshd_config
-    
-    sudo systemctl restart ssh
-    echo "SSH настроен безопасно."
-}
-
-
 # Здесь будут добавляться следующие задачи
 
 echo "Установка завершена!"
