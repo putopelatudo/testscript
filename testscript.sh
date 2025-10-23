@@ -119,6 +119,62 @@ create_user() {
 create_user "putopelatudo"
 create_user "reserveme"
 
+# Функция для смены порта SSH
+change_ssh_port() {
+    echo "Смена порта SSH с 22 на 4422..."
+    
+    # Создаем резервную копию конфигурации SSH
+    sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup.$(date +%Y%m%d%H%M%S)
+    
+    # Редактируем конфигурацию SSH
+    echo "Редактирование /etc/ssh/sshd_config..."
+    
+    # Комментируем старый порт если он есть и добавляем новый
+    sudo sed -i 's/^Port .*/#Port 22/' /etc/ssh/sshd_config
+    
+    # Добавляем новый порт
+    if grep -q "^Port 4422" /etc/ssh/sshd_config; then
+        echo "Порт 4422 уже настроен"
+    else
+        echo "Port 4422" | sudo tee -a /etc/ssh/sshd_config
+    fi
+    
+    # Разрешаем новый порт в UFW
+    echo "Добавление правила UFW для порта 4422..."
+    sudo ufw allow 4422/tcp comment "SSH custom port"
+    
+    # Перезапускаем SSH службу
+    echo "Перезапуск службы SSH..."
+    sudo systemctl restart ssh
+    
+    echo "Порт SSH успешно изменен на 4422"
+    echo "ВАЖНО: Не закрывайте это соединение! Проверьте подключение через новый порт в другом окне."
+    echo "Для подключения используйте: ssh -p 4422 username@server_ip"
+}
+
+# Функция для настройки SSH (оригинальная из скрипта)
+setup_ssh() {
+    echo "Настройка SSH..."
+    sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup.$(date +%Y%m%d%H%M%S)
+    
+    # Отключаем вход по паролю и root-вход
+    sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+    sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
+    
+    # Включаем использование PAM
+    sudo sed -i 's/UsePAM no/UsePAM yes/' /etc/ssh/sshd_config
+    
+    # Добавляем настройки безопасности
+    echo "Protocol 2" | sudo tee -a /etc/ssh/sshd_config
+    echo "MaxAuthTries 3" | sudo tee -a /etc/ssh/sshd_config
+    echo "ClientAliveInterval 300" | sudo tee -a /etc/ssh/sshd_config
+    echo "ClientAliveCountMax 2" | sudo tee -a /etc/ssh/sshd_config
+    
+    sudo systemctl restart ssh
+    echo "SSH настроен безопасно."
+}
+
+
 # Здесь будут добавляться следующие задачи
 
 echo "Установка завершена!"
